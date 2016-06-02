@@ -1,21 +1,24 @@
 package com.example
 
-import japgolly.scalajs.react._
-import org.scalajs.dom.raw.{File, FileList}
+import java.net.URL
 
-import scala.collection.mutable
+import japgolly.scalajs.react._
+import org.scalajs.dom.raw.{FileReader, File, FileList}
+import org.scalajs.dom.raw.UIEvent
+
 import scala.collection.mutable.ArrayBuffer
 import scala.scalajs.js.JSApp
 import scala.scalajs.js.annotation.JSExport
 
 import org.scalajs.dom.document
-//import org.scalajs.jquery.jQuery
 import japgolly.scalajs.react.vdom.prefix_<^._
 
 object Hello extends JSApp {
 
-  case class State(dragOver: Boolean, fileList: Option[FileList])
+  case class State(dragOver: Boolean, fileList: Option[FileList], selectedFile: Option[Int], fileUrl: Option[String])
   class Backend($: BackendScope[String, State]) {
+//    def onFileLoad(e: ReactEventAliases#Read)
+
     def onDragOver(e: ReactEventAliases#ReactDragEventH): Callback = {
       e.stopPropagation()
       e.preventDefault()
@@ -27,11 +30,23 @@ object Hello extends JSApp {
       $.modState(_.copy(dragOver = false))
     }
 
+
     def onDrop(e: ReactEventAliases#ReactDragEventH): Callback = {
       e.stopPropagation()
       e.preventDefault()
       e.dataTransfer.files
-      $.setState(State(false, Some(e.dataTransfer.files))) >>
+      val fileReader = new FileReader
+      val file = e.dataTransfer.files.item(0)
+      fileReader.readAsDataURL(file)
+      fileReader.onload = (e: UIEvent) => {
+        // Cast is OK, since we are calling readAsText
+        val contents = fileReader.result.asInstanceOf[String]
+        println("the shit is loaded")
+        $.modState(s => s.copy(fileUrl = Some(contents))).runNow()
+      }
+
+//      Callback.
+      $.setState(State(false, Some(e.dataTransfer.files), Some(0), None)) >>
         Callback.log(e.dataTransfer.files)
     }
 
@@ -39,14 +54,14 @@ object Hello extends JSApp {
       <.div(^.classSet("main" -> true),
         <.div(^.classSet("col"->true), DropArea((s, this))),
         <.div(^.classSet("col"->true), AudioFileList((s, this))),
-        <.div(^.classSet("col"->true))
+        <.div(^.classSet("col"->true), if (s.fileUrl.isEmpty) "stuff" else AudioPlayer(s.fileUrl.get))
       )
     }
   }
 
 
   val TakoraApp = ReactComponentB[String]("App")
-    .initialState[State](State(false, None))
+    .initialState[State](State(false, None, None, None))
     .renderBackend[Backend].build
 
   val DropArea = ReactComponentB[(State, Backend)]("DropArea")
@@ -86,9 +101,24 @@ object Hello extends JSApp {
       ).build
 
 
-  val ScoreText = ReactComponentB[String]("ScoreText")
-    .render_P(scoreText => <.span(^.className := "alignleft", "Score: " + scoreText))
-    .build
+  class AudioplayerBackend($: BackendScope[String, (Option[Float], Option[Float])]) {
+
+  }
+
+//  val Example = ReactComponentB[Unit]("Example")
+//    .initialState(Vector("hello", "world"))
+//    .backend(new Backend(_))
+//    .render(_.backend.render)
+//    .build
+
+  val AudioPlayer = ReactComponentB[String]("AudioPlayer")
+
+      .initialState[(Option[Float], Option[Float])](None, None)
+    .backend(new AudioplayerBackend(_))
+    .renderPS({
+      case (_, p, s) =>
+        <.audio(^.autoPlay := true, ^.controls := true, <.source(^.src := p), "Your browser does not support the audio element.")
+    }).build
 
   @JSExport
   override def main(): Unit = {
