@@ -15,7 +15,7 @@ libraryDependencies += "be.doeraene" %%% "scalajs-jquery" % "0.9.0"
 
 // core = essentials only. No bells or whistles.
 libraryDependencies += "com.github.japgolly.scalajs-react" %%% "core" % "0.11.1"
-
+libraryDependencies += "com.github.japgolly.scalajs-react" %%% "extra" % "0.11.1"
 
 enablePlugins(ScalaJSPlugin)
 
