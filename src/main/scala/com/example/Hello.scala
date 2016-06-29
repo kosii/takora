@@ -9,7 +9,8 @@ import org.scalajs.dom.raw.{FileReader, File, FileList}
 import org.scalajs.dom.raw.UIEvent
 
 import scala.collection.mutable.ArrayBuffer
-import scala.scalajs.js.JSApp
+import scala.concurrent.Promise
+import scala.scalajs.js.{JSApp}
 import scala.scalajs.js.annotation.JSExport
 
 import org.scalajs.dom.document
@@ -20,7 +21,7 @@ import scala.concurrent.duration._
 
 object Hello extends JSApp {
 
-  val AudioRef = Ref("grrrr")
+
   val OuterRef = Ref("o")
 
   case class State(
@@ -28,10 +29,19 @@ object Hello extends JSApp {
                     fileList: Option[FileList],
                     selectedFile: Option[Int],
                     fileUrl: Option[String],
-                    start: Option[Float],
-                    end: Option[Float])
+                    start: Double,
+                    end: Option[Double]) {
+    def hitRepeat(current: Double): State = {
+      if (end.isDefined) {
+        this.copy(start = this.end.get, end = None)
+      } else {
+        this.copy(end = Some(current))
+      }
+    }
+  }
   class Backend($: BackendScope[String, State]) extends TimerSupport {
 //    def onFileLoad(e: ReactEventAliases#Read)
+
 
     def onDragOver(e: ReactEventAliases#ReactDragEventH): Callback = {
       e.stopPropagation()
@@ -48,12 +58,10 @@ object Hello extends JSApp {
     def onKeydown(e: ReactKeyboardEvent): Callback = {
       def stuff = CallbackOption.keyCodeSwitch(e, ctrlKey = false) {
         case KeyCode.R =>
-          Callback.log("RRRRRRR")
+          AudioRef($).fold(Callback.log("RRRR"))( a =>
+            Callback.log("pina") >> $.modState(_.hitRepeat(a.currentTime)))
       }
-
       stuff >> e.preventDefaultCB
-
-
     }
 
     def onDrop(e: ReactEventAliases#ReactDragEventH): Callback = {
@@ -68,14 +76,10 @@ object Hello extends JSApp {
         val contents = fileReader.result.asInstanceOf[String]
         $.modState(s => s.copy(fileUrl = Some(contents))).runNow()
       }
-
-//      Callback.
-      $.setState(State(false, Some(e.dataTransfer.files), Some(0), None, None, None)) >>
-        Callback.log(e.dataTransfer.files)
+      $.modState(_.copy(false, Some(e.dataTransfer.files), Some(0)))
+      $.setState(State(false, Some(e.dataTransfer.files), Some(0), None, 0.0, None)) >>
+        Callback.log(e.dataTransfer.files) >> init
     }
-
-
-
 
     def render(p: String, s: State) = {
       <.div(
@@ -85,7 +89,7 @@ object Hello extends JSApp {
         ^.tabIndex := 0,
         <.div(^.classSet("col"->true), DropArea((s, this))),
         <.div(^.classSet("col"->true), AudioFileList((s, this))),
-        <.div(^.classSet("col"->true), if (s.fileUrl.isEmpty) "stuff" else AudioPlayer((s.fileUrl.get, this)))
+        <.div(^.classSet("col"->true), if (s.fileUrl.isEmpty) "stuff" else AudioPlayer(s.fileUrl.get))
       )
     }
 
@@ -99,13 +103,22 @@ object Hello extends JSApp {
     }
   }
 
-
   val TakoraApp = ReactComponentB[String]("App")
-    .initialState[State](State(false, None, None, None, None, None))
+    .initialState[State](State(false, None, None, None, 0.0, None))
     .renderBackend[Backend]
     .componentDidMount({ c =>
-      c.backend.init >> c.backend.setInterval(Callback.log(AudioRef(c).toString), 500 millisecond)
+      c.backend.init >> c.backend.setInterval(Callback({
+        if (AudioRef(c).isDefined) {
+          val audio = AudioRef(c).get
+          c.state.end.map({ end =>
+            if (end < audio.currentTime) audio.currentTime = c.state.start
+            else if (audio.currentTime < c.state.start) audio.currentTime = c.state.start
+          })
+        }
+        }), 33 millisecond
+      )
     })
+//    .componentDidUpdate(c => Callback.log(s"Component updated ${AudioRef(c.$)}"))
     .build
 
   val DropArea = ReactComponentB[(State, Backend)]("DropArea")
@@ -116,9 +129,39 @@ object Hello extends JSApp {
           ^.onDragLeave ==> b.onDragLeave,
           ^.onDrop ==> b.onDrop,
           ^.classSet("over" -> s.dragOver),
-          (if (s.dragOver) "Release audio file" else "Drop audio file here") + " btw my name is " + s.dragOver
+          (if (s.dragOver) "Release audio file" else "Drop audio file here")
         )
       }).build
+
+  def AudioPlayer(url: String) = <.audio(
+    ^.ref := AudioRef,
+    ^.autoPlay  := true,
+    ^.controls  := true,
+    <.source(^.src := url),
+    "Your browser does not support the audio element."
+  )
+
+
+  val AudioRef = Ref[Audio]("audio")
+//  class PlayerBackend extends TimerSupport
+//  val AudioPlayer = ReactComponentB[String]("AudioPlayer")
+////    .initialState(0L)
+////    .backend(i => new PlayerBackend())
+//    .render_P(url => {
+//      <.audio(
+//        ^.ref := AudioRef,
+//        ^.autoPlay  := true,
+//        ^.controls  := true,
+//        <.source(^.src := url),
+//        "Your browser does not support the audio element."
+//      )
+//    })
+////    .componentDidMount({ c =>
+////      c.backend.setInterval(CallbackTo[Double] {
+////        AudioRef(c).fold(0.0)(_.currentTime)
+////      } flatMap {msg => Callback.log(msg)}, 100 millisecond)
+////    }).configure(TimerSupport.install)
+//    .build
 
   val AudioFileElement = ReactComponentB[File]("AudioFileElement")
     .render_P(p => <.option(^.classSet("active" -> p.name.endsWith(".mp3")), p.name))
@@ -144,18 +187,6 @@ object Hello extends JSApp {
       ).build
 
 
-
-  val AudioPlayer = ReactComponentB[(String, Backend)]("AudioPlayer")
-//      .initialState[(Option[Float], Option[Float])](None, None)
-    .render({ $ =>
-        <.audio(
-          ^.autoPlay  := true,
-          ^.ref       := AudioRef,
-          ^.controls  := true,
-          <.source(^.src := $.props._1),
-          "Your browser does not support the audio element."
-        )
-    }).build
 
   @JSExport
   override def main(): Unit = {
