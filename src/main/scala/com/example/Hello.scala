@@ -60,6 +60,16 @@ object Hello extends JSApp {
         case KeyCode.R =>
           AudioRef($).fold(Callback.log("RRRR"))( a =>
             Callback.log("pina") >> $.modState(_.hitRepeat(a.currentTime)))
+        case KeyCode.A =>
+          $.modState(s => s.copy(start = (s.start - 0.1) max 0.0))
+        case KeyCode.A =>
+          $.modState(s => s.copy(start = (s.start + 0.1) max 0.0))
+        case KeyCode.D =>
+          AudioRef($).fold(Callback.log("undef"))( a =>
+            $.modState(s => s.copy(end = s.end.map(end => (end - 0.1) min a.duration))))
+        case KeyCode.F =>
+          AudioRef($).fold(Callback.log("undef"))( a =>
+            $.modState(s => s.copy(end = s.end.map(end => (end + 0.1) min a.duration))))
       }
       stuff >> e.preventDefaultCB
     }
@@ -87,7 +97,10 @@ object Hello extends JSApp {
         ^.classSet("main" -> true),
         ^.onKeyDown ==> onKeydown,
         ^.tabIndex := 0,
-        <.div(^.classSet("col"->true), DropArea((s, this))),
+        <.div(^.classSet("col"->true),
+          DropArea((s, this)),
+          Status((s.start, s.end))
+        ),
         <.div(^.classSet("col"->true), AudioFileList((s, this))),
         <.div(^.classSet("col"->true), if (s.fileUrl.isEmpty) "stuff" else AudioPlayer(s.fileUrl.get))
       )
@@ -103,6 +116,15 @@ object Hello extends JSApp {
     }
   }
 
+  val Status = ReactComponentB[(Double, Option[Double])]("Status")
+    .render_P({ case (start, endOpt) =>
+      endOpt.fold(<.div(<.span("fuck")))(end =>
+        <.div(
+          <.span(s"repeating between ${start} and ${end}")
+        ))
+    })
+    .build
+
   val TakoraApp = ReactComponentB[String]("App")
     .initialState[State](State(false, None, None, None, 0.0, None))
     .renderBackend[Backend]
@@ -112,8 +134,8 @@ object Hello extends JSApp {
           val audio = AudioRef(c).get
           c.state.end.map({ end =>
             if (end < audio.currentTime) audio.currentTime = c.state.start
-            else if (audio.currentTime < c.state.start) audio.currentTime = c.state.start
           })
+          if (audio.currentTime < c.state.start) audio.currentTime = c.state.start
         }
         }), 33 millisecond
       )
@@ -143,25 +165,6 @@ object Hello extends JSApp {
 
 
   val AudioRef = Ref[Audio]("audio")
-//  class PlayerBackend extends TimerSupport
-//  val AudioPlayer = ReactComponentB[String]("AudioPlayer")
-////    .initialState(0L)
-////    .backend(i => new PlayerBackend())
-//    .render_P(url => {
-//      <.audio(
-//        ^.ref := AudioRef,
-//        ^.autoPlay  := true,
-//        ^.controls  := true,
-//        <.source(^.src := url),
-//        "Your browser does not support the audio element."
-//      )
-//    })
-////    .componentDidMount({ c =>
-////      c.backend.setInterval(CallbackTo[Double] {
-////        AudioRef(c).fold(0.0)(_.currentTime)
-////      } flatMap {msg => Callback.log(msg)}, 100 millisecond)
-////    }).configure(TimerSupport.install)
-//    .build
 
   val AudioFileElement = ReactComponentB[File]("AudioFileElement")
     .render_P(p => <.option(^.classSet("active" -> p.name.endsWith(".mp3")), p.name))
