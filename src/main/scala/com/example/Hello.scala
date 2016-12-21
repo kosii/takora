@@ -61,22 +61,31 @@ object Hello extends JSApp {
           AudioRef($).fold(Callback.log("RRRR"))( a =>
             Callback.log("pina") >> $.modState(_.hitRepeat(a.currentTime)))
         case KeyCode.A =>
-          $.modState(s => s.copy(start = (s.start - 0.1) max 0.0)) >>
+          $.modState(s => s.copy(start = (s.start - 0.05) max 0.0)) >>
             $.state.map { s => AudioRef($).map { audio => audio.currentTime = s.start }; ()}
         case KeyCode.S =>
-          $.modState(s => s.copy(start = (s.start + 0.1) max 0.0)) >>
+          $.modState(s => s.copy(start = (s.start + 0.05) max 0.0)) >>
             $.state.map { s => AudioRef($).map { audio => audio.currentTime = s.start }; ()}
         case KeyCode.D =>
           AudioRef($).fold(Callback.log("undef"))( a =>
-            $.modState(s => s.copy(end = s.end.map(end => (end - 0.1) min a.duration))) >>
+            $.modState(s => s.copy(end = s.end.map(end => (end - 0.05) min a.duration))) >>
               $.state.map { s => s.end.map( end => a.currentTime = (end - 0.5) max s.start); ()})
         case KeyCode.F =>
           AudioRef($).fold(Callback.log("undef"))( a =>
-            $.modState(s => s.copy(end = s.end.map(end => (end + 0.1) min a.duration))) >>
+            $.modState(s => s.copy(end = s.end.map(end => (end + 0.05) min a.duration))) >>
               $.state.map { s => s.end.map( end => a.currentTime = (end - 0.5) max s.start); ()})
         case KeyCode.E =>
           $.modState(s => s.copy(start = 0.0, end = None)) >>
             Callback { AudioRef($).map { a => a.currentTime = 0.0 }}
+        case KeyCode.Z =>
+            Callback { AudioRef($).map { a => a.playbackRate *= 0.9 }}
+        case KeyCode.X =>
+            Callback { AudioRef($).map { a => a.playbackRate /= 0.9 }}
+        case KeyCode.C =>
+            Callback { AudioRef($).map { a => a.playbackRate = 1.0 }}
+        case KeyCode.Space =>
+          Callback.log("FUCK") >>
+          Callback { AudioRef($).map { a => if (a.paused) a.play() else a.pause() } }
 
       }
       stuff >> e.preventDefaultCB
